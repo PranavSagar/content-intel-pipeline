@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# DVC - actual data and model files are tracked by DVC, not git
+/data/raw/
+/data/processed/
+/artifacts/checkpoints/
+/artifacts/logs/
+
+# Environment variables - NEVER commit this
+.env
+
+# MLflow local runs (when running locally, not on DagsHub)
+mlruns/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
