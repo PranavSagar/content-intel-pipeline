@@ -6,178 +6,236 @@ Let's trace this sentence from AG News through the entire model:
 
 Expected output: `Sci/Tech`
 
+There are 7 steps. Each step has a plain English explanation first,
+then the technical detail underneath.
+
 ---
 
 ## Step 1 — Tokenization: text → token IDs
 
-The model cannot read words. It only understands numbers.
+### Plain English
+The model has never seen a "word" in its life. It only understands numbers.
+So the first job is to convert words into numbers it can work with.
 
-The tokenizer breaks the sentence into **tokens** — small chunks it has a vocabulary for.
-DistilBERT's vocabulary has ~30,000 entries.
+Think of it like a restaurant menu. Every dish has a number — "Butter Chicken = 42",
+"Dal Makhani = 17". The waiter doesn't write "Butter Chicken" on the order slip,
+they write "42". The kitchen understands 42. The tokenizer is that conversion system.
 
+DistilBERT has a vocabulary of ~30,000 tokens (not quite words — more like word-pieces).
+Every token has a unique ID number. The tokenizer looks each piece up and returns a list of numbers.
+
+Two special tokens are always added:
+- `[CLS]` at the start — think of it as a "listening post". By the end of the model,
+  it will have absorbed the meaning of the entire sentence. This is what gets classified.
+- `[SEP]` at the end — just a full stop marker.
+
+### Technical detail
 ```
 "NASA launches new telescope to study distant galaxies"
          ↓  tokenizer
 ["[CLS]", "nasa", "launches", "new", "telescope", "to", "study", "distant", "galaxies", "[SEP]"]
-         ↓  vocabulary lookup (each token → integer)
+         ↓  vocabulary lookup
 [  101,   1029,    4888,     2047,    9008,      2000,  2817,    6007,      9721,     102  ]
 ```
-
-Two special tokens are always added:
-- `[CLS]` (token 101) — "classification token". Placed at the start. By the end of the
-  model, this single token's vector will represent the meaning of the entire sentence.
-  This is what the classification head reads.
-- `[SEP]` (token 102) — "separator". Marks the end of the sentence.
-
-**Key insight**: The tokenizer is fixed. It never changes during training.
-Only the model weights change.
+The tokenizer is **fixed** — it never changes during training. Only model weights change.
 
 ---
 
 ## Step 2 — Embeddings: token IDs → vectors
 
-Each token ID gets looked up in an **embedding table** — a matrix of shape
-`[vocab_size × embedding_dim]` = `[30,000 × 768]`.
+### Plain English
+Numbers like `1029` still don't carry meaning — they're just IDs like a passport number.
+The next step converts each ID into a list of 768 numbers that actually *encode meaning*.
 
-So token `1029` (nasa) → a vector of 768 numbers.
-Token `4888` (launches) → a different vector of 768 numbers.
+Imagine a map where every word has a location. Words with similar meanings live close together.
+"Telescope" and "microscope" are neighbours. "Telescope" and "football" are far apart.
+That map is 768-dimensional (instead of 2D), but the idea is the same — meaning is geography.
+
+The model looks up each token ID in a big table and gets its 768-number "location".
+These numbers were learned during pre-training by reading billions of sentences.
+
+At this stage, each word still doesn't know what's around it. "bank" is just "bank" —
+it doesn't know yet if there's a river nearby or a loan officer.
+
+### Technical detail
+The embedding table is a matrix of shape `[30,000 × 768]`.
+Each token ID is a row index into that matrix.
 
 ```
-token IDs:  [101,  1029, 4888, 2047, 9008, 2000, 2817, 6007, 9721, 102]
-               ↓    ↓    ↓    ↓    ↓    ↓    ↓    ↓    ↓    ↓
-embeddings: [v0,  v1,  v2,  v3,  v4,  v5,  v6,  v7,  v8,  v9]   ← each is 768 numbers
+token IDs:   [101,  1029, 4888, 2047, 9008, 2000, 2817, 6007, 9721, 102]
+                ↓    ↓    ↓    ↓    ↓    ↓    ↓    ↓    ↓    ↓
+embeddings: [v0,  v1,  v2,  v3,  v4,  v5,  v6,  v7,  v8,  v9]
 ```
-
-At this point: no token knows anything about the other tokens.
-"NASA" doesn't know it appears next to "telescope". They are just independent vectors.
-
-**What are these 768 numbers?**
-They encode semantic meaning learned during pre-training.
-Similar words have similar vectors. "telescope" and "microscope" are closer together
-than "telescope" and "football".
-
-Think of it like a 768-dimensional coordinate system where meaning is geography.
+Each `v` is a vector of 768 floats. Result: a `10 × 768` matrix (10 tokens, 768 features each).
 
 ---
 
-## Step 3 — Transformer layers: vectors talk to each other
+## Step 3 — Transformer layers: words talk to each other
 
-This is the core of the model. DistilBERT has 6 transformer layers stacked on top of
-each other. Each layer does the same thing: **let every token look at every other token
-and update its own representation based on what it sees.**
+### Plain English
+Here's where the magic happens — and it's actually intuitive once you see the analogy.
 
-This mechanism is called **attention**.
+Imagine you're reading: *"The NASA scientist studied the galaxy through the telescope."*
 
-### What attention actually does
+Your brain doesn't read word by word in isolation. When you hit "studied", your eyes
+go back to "scientist" and "galaxy" to understand *who* studied *what*.
+When you hit "telescope", you connect it to "NASA" and "galaxy" to understand the context.
 
-Before attention, "bank" in these two sentences has the same vector:
-- "The river bank was flooded"
-- "The bank approved the loan"
+That's exactly what attention does. Every word looks at every other word and asks:
+*"How much should you influence my meaning?"*
 
-After attention, "bank" in sentence 1 has been influenced by "river" and "flooded",
-and "bank" in sentence 2 has been influenced by "approved" and "loan".
-They now have *different* vectors even though they started identical.
+After this process, "launches" in our sentence knows it's a NASA launch — not a product launch.
+"Study" knows it's scientific study — not a school exam.
+The `[CLS]` token at the start has been influenced by every word in the sentence
+and now carries a rich summary of the whole thing.
 
-In our sentence:
-- "launches" gets influenced by "NASA" → understands this is a space launch, not a product launch
-- "study" gets influenced by "galaxies" → understands scientific study, not school study
-- `[CLS]` gets influenced by *every* token → by the end it's a compressed summary of the sentence
+DistilBERT does this 6 times in 6 stacked layers. Each pass refines the meaning further.
 
-### Mathematically (simplified)
+### Technical detail
+Each transformer layer contains two sub-layers:
+1. **Multi-head self-attention** — every token attends to every other token
+2. **Feed-forward network** — each token's vector is independently transformed
 
-For each token, attention computes three things:
+Attention computes three vectors per token:
 - **Query (Q)**: "What am I looking for?"
 - **Key (K)**: "What do I offer to others?"
 - **Value (V)**: "What information do I carry?"
 
-Each token asks its Query against every other token's Key.
-High similarity = high attention score = that token's Value gets mixed in more.
-
 ```
-attention_score("launches", "NASA") = high   → "NASA" heavily influences "launches"
-attention_score("launches", "the")  = low    → "the" barely influences "launches"
+attention_score = softmax(Q × Kᵀ / √768)
+output = attention_score × V
 ```
 
-After 6 layers of this, every token's vector has been updated 6 times, incorporating
-context from the whole sentence.
+High Q·K similarity = high attention = that token's Value gets mixed in strongly.
+
+```
+attention_score("launches", "NASA")    = high  → "NASA" heavily shapes "launches"
+attention_score("launches", "distant") = low   → "distant" barely shapes "launches"
+```
+
+After 6 layers, each token's 768-vector has been updated 6 times using context
+from the whole sentence.
 
 ---
 
-## Step 4 — The [CLS] vector: sentence representation
+## Step 4 — The [CLS] vector: one vector summarises the sentence
 
-After 6 transformer layers, we take only the `[CLS]` token's final vector.
-It's a 768-dimensional vector that now encodes the meaning of the entire sentence,
-shaped by 6 rounds of every token influencing every other token.
+### Plain English
+After all 6 layers of words influencing each other, we throw away everything
+except the `[CLS]` token's final vector.
 
+Think of `[CLS]` like a class representative who sat in a room with every word,
+listened to all their conversations, and now has to give a one-line summary
+of the whole sentence to the principal.
+
+That summary is a list of 768 numbers. Similar sentences will have similar summaries.
+*"NASA builds new rover"* and *"Scientists launch space probe"* will have
+summaries that are close together in that 768-dimensional space.
+
+### Technical detail
 ```
-After 6 transformer layers:
-[CLS] vector = [0.23, -1.4, 0.87, ..., 0.11]   ← 768 numbers
+outputs = model(input_ids, attention_mask)
+cls_vector = outputs.last_hidden_state[:, 0, :]   # shape: [1, 768]
 ```
-
-This is the sentence's "fingerprint". Similar sentences have similar fingerprints.
+`[:, 0, :]` grabs position 0 — the `[CLS]` token — from the final layer's output.
+This is the sentence embedding.
 
 ---
 
-## Step 5 — Classification head: vector → prediction
+## Step 5 — Classification head: summary → prediction
 
-The classification head is just a linear layer (a matrix multiply):
+### Plain English
+Now we have a 768-number summary of the sentence.
+The classification head is a simple decision-maker that reads that summary
+and says: *"This sounds most like Sci/Tech."*
+
+It's like handing your class representative's summary to a judge who has
+read thousands of previous summaries labelled World / Sports / Business / Sci/Tech
+and learned to tell them apart.
+
+The judge outputs 4 scores — one per category. Higher score = more confident.
+
+### Technical detail
+The classification head is a single linear layer:
+```
+logits = cls_vector × W + b
+```
+Where `W` is a `768 × 4` weight matrix and `b` is a bias of size 4.
 
 ```
-[CLS] vector (768 numbers)
-         ↓   × weight matrix (768 × 4)
+cls_vector (768 numbers)
+      ↓   × W (768 × 4)
 logits (4 numbers):  [2.1,  -0.8,  0.3,  3.7]
                     World  Sports  Biz  Sci/Tech
-         ↓   softmax (convert to probabilities)
+      ↓   softmax
 probs:              [0.11,  0.06,  0.08, 0.75]
-         ↓   argmax
+      ↓   argmax
 prediction:         Sci/Tech  ✓
 ```
-
-The 4 output numbers are called **logits** — raw unnormalized scores.
-Softmax converts them to probabilities that sum to 1.
-Argmax picks the highest probability class.
+This layer is **trained from scratch** — it didn't exist in the pre-trained model.
+The transformer layers get gently adjusted; this layer learns everything from our data.
 
 ---
 
-## Step 6 — Loss: how wrong were we?
+## Step 6 — Loss: measuring how wrong we were
 
-During training, we know the correct label (Sci/Tech = index 3).
-We compute **cross-entropy loss** — a single number measuring how wrong the model was.
+### Plain English
+The model made a prediction. During training, we know the right answer.
+Loss is just a number that says: *"You were this wrong."*
+
+If the model said 75% confidence for the right class → low loss, good job.
+If the model said 25% confidence spread equally across all 4 → high loss, very confused.
+
+The entire point of training is to push this number down over many examples.
+
+### Technical detail
+We use **cross-entropy loss**, standard for classification:
 
 ```
 correct label: index 3 (Sci/Tech)
 predicted probs: [0.11, 0.06, 0.08, 0.75]
-loss = -log(0.75) = 0.29    ← low loss, model was right and confident
+
+loss = -log(probability of correct class)
+     = -log(0.75)
+     = 0.29    ← low, model was right and confident
 ```
 
-If the model had predicted [0.25, 0.25, 0.25, 0.25] (totally confused):
+Worst case — completely random model:
 ```
-loss = -log(0.25) = 1.39    ← high loss, model had no idea
+loss = -log(0.25) = 1.39    ← high, model had no idea
 ```
 
 ---
 
-## Step 7 — Backpropagation: how weights update
+## Step 7 — Backpropagation: learning from the mistake
 
-This is where learning happens. The loss is a signal: "you were this wrong."
+### Plain English
+This is how the model actually learns.
 
-Backpropagation traces that signal backwards through every operation in the model,
-computing how much each weight contributed to the error.
+Imagine you throw darts at a board and miss. Someone tells you *"you aimed too far right."*
+You adjust slightly left next throw. Over thousands of throws, you get accurate.
 
-**Gradient**: the direction and size each weight should change to reduce the loss.
+Backpropagation is that feedback mechanism. After computing the loss, it traces
+backwards through every operation in the model and figures out:
+*"Which weights caused this error, and by how much?"*
 
+Then it nudges each weight slightly in the direction that would have reduced the loss.
+Learning rate controls how big each nudge is — too large and you overshoot, too small and you never arrive.
+
+After 120,000 sentences × 3 epochs = 360,000 nudges, the weights have shaped themselves
+to correctly separate news into 4 categories.
+
+### Technical detail
+For every weight `w` in the model:
 ```
-for every weight in the model:
-    weight = weight - (learning_rate × gradient)
+gradient = ∂loss / ∂w          (how much did this weight contribute to the error?)
+w = w - learning_rate × gradient
 ```
+We use `learning_rate = 2e-5` (0.00002). Very small, because pre-trained weights are
+already good — we want gentle adjustments, not a full reset.
 
-Learning rate (e.g., 2e-5 = 0.00002) controls how big each step is.
-Too large → weights overshoot and bounce around.
-Too small → training takes forever.
-
-After one sentence: weights change by a tiny amount.
-After 120,000 sentences × 3 epochs: weights have been nudged 360,000 times
-into a configuration that correctly classifies news.
+PyTorch handles all of this automatically via `loss.backward()` + `optimizer.step()`.
+The HuggingFace `Trainer` calls these for us.
 
 ---
 
@@ -185,40 +243,35 @@ into a configuration that correctly classifies news.
 
 ```
 "NASA launches new telescope to study distant galaxies"
-         ↓  tokenizer (fixed, never changes)
-token IDs: [101, 1029, 4888, ...]
-         ↓  embedding lookup (these weights get fine-tuned)
-token vectors: 10 × 768 matrix
-         ↓  transformer layer 1 (attention + feedforward, weights fine-tuned)
-updated vectors: tokens now aware of neighbors
-         ↓  transformer layer 2
-         ↓  transformer layer 3
-         ↓  transformer layer 4
-         ↓  transformer layer 5
-         ↓  transformer layer 6
-[CLS] vector: 768 numbers encoding full sentence meaning
-         ↓  classification head (trained from scratch)
+        ↓  tokenizer (fixed — never changes)
+[101, 1029, 4888, 2047, 9008, 2000, 2817, 6007, 9721, 102]
+        ↓  embedding table (fine-tuned)
+10 vectors × 768 numbers — tokens as meaning-coordinates
+        ↓  transformer layer 1: words look at each other
+        ↓  transformer layer 2: understanding deepens
+        ↓  transformer layer 3
+        ↓  transformer layer 4
+        ↓  transformer layer 5
+        ↓  transformer layer 6: [CLS] absorbs full sentence meaning
+[CLS] vector — 768 numbers, the sentence's fingerprint
+        ↓  classification head (trained from scratch)
 logits: [2.1, -0.8, 0.3, 3.7]
-         ↓  softmax
+        ↓  softmax
 probs:  [0.11, 0.06, 0.08, 0.75]
-         ↓  argmax
-output: Sci/Tech ✓
+        ↓  argmax
+Sci/Tech ✓
 ```
 
 ---
 
-## What fine-tuning changes vs pre-training
+## One-line summaries of each step
 
-During **pre-training** (done by HuggingFace, not us):
-- The embedding table was built
-- All 6 transformer layers were trained on billions of sentences
-- The model learned language
-
-During **fine-tuning** (what we do):
-- The transformer layers get *slightly* adjusted for news language
-- The classification head is trained from zero — it didn't exist before
-- The embedding table gets slightly adjusted
-- The tokenizer is untouched
-
-The pre-trained weights are the reason we can do this in 30 minutes instead of weeks.
-We are standing on the shoulders of HuggingFace's compute bill.
+| Step | Plain English | Technical name |
+|---|---|---|
+| 1 | Words → numbers | Tokenization |
+| 2 | Numbers → meaning-coordinates | Embedding lookup |
+| 3 | Words influence each other | Self-attention (6 layers) |
+| 4 | Sentence gets a fingerprint | CLS pooling |
+| 5 | Fingerprint → category | Linear classification head |
+| 6 | Measure how wrong we were | Cross-entropy loss |
+| 7 | Nudge weights to be less wrong | Backpropagation + SGD |
