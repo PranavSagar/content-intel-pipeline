@@ -6,6 +6,7 @@ of this project. Written while building — so the reasoning is fresh.
 ## Concepts
 
 - [Fine-tuning vs Training from Scratch](concepts/fine-tuning.md)
+- [How DistilBERT processes one sentence — end to end](concepts/transformer-end-to-end.md)
 
 ## Architecture Decisions
 
