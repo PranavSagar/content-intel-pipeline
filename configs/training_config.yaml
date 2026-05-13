@@ -1,0 +1,14 @@
+model:
+  base: "distilbert-base-uncased"
+  max_length: 128
+
+training:
+  epochs: 3
+  batch_size: 32
+  learning_rate: 2e-5
+  warmup_steps: 500
+  weight_decay: 0.01
+  early_stopping_patience: 2
+
+mlflow:
+  experiment_name: "content-classification"
