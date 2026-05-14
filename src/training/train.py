@@ -126,5 +126,4 @@ if __name__ == "__main__":
     with open(config_path) as f:
         config = yaml.safe_load(f)
 
-    # Change subset=1000 to subset=None when you want a full training run
-    train(config, subset=1000)
+    train(config, subset=None)
