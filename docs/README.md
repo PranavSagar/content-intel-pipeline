@@ -8,6 +8,7 @@ of this project. Written while building — so the reasoning is fresh.
 - [Fine-tuning vs Training from Scratch](concepts/fine-tuning.md)
 - [How DistilBERT processes one sentence — end to end](concepts/transformer-end-to-end.md)
 - [The Serving Layer — FastAPI + Prometheus](concepts/serving-layer.md)
+- [The Kafka Pipeline — Producer + Consumer](concepts/kafka-pipeline.md)
 
 ## Architecture Decisions
 
