@@ -1,0 +1,80 @@
+name: Weekly Drift Check
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"  # Every Monday at 9:00 AM UTC
+  workflow_dispatch:      # Also triggerable manually from GitHub UI
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install monitoring dependencies
+        run: pip install -r requirements-monitoring.txt
+
+      # In production this would pull classifications.db from Neon PostgreSQL.
+      # For now we generate a small synthetic database so the workflow runs
+      # end-to-end and proves the drift script works in CI.
+      - name: Seed a synthetic classifications database
+        run: |
+          python -c "
+          import sqlite3, json, random, time
+          from datetime import datetime, timedelta
+
+          labels = ['World', 'Sports', 'Business', 'Sci/Tech']
+          conn = sqlite3.connect('classifications.db')
+          conn.execute('''
+              CREATE TABLE IF NOT EXISTS classifications (
+                  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                  text       TEXT NOT NULL,
+                  label      TEXT NOT NULL,
+                  confidence REAL NOT NULL,
+                  latency_ms REAL,
+                  cached     BOOLEAN DEFAULT FALSE,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+              )
+          ''')
+
+          # Insert 200 rows spread across the last 24h
+          base_time = datetime.utcnow() - timedelta(hours=24)
+          rows = []
+          for i in range(200):
+              ts = base_time + timedelta(seconds=i * 432)   # ~7 min apart
+              rows.append((
+                  f'Synthetic article {i}',
+                  random.choice(labels),
+                  round(random.uniform(0.85, 1.0), 4),
+                  round(random.uniform(10, 40), 1),
+                  False,
+                  ts.isoformat(),
+              ))
+          conn.executemany(
+              'INSERT INTO classifications (text, label, confidence, latency_ms, cached, created_at) VALUES (?,?,?,?,?,?)',
+              rows,
+          )
+          conn.commit()
+          conn.close()
+          print('seeded 200 rows into classifications.db')
+          "
+
+      - name: Run drift check
+        env:
+          MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+          MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
+          MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
+        run: python -m src.monitoring.drift --db classifications.db --hours 168 --output-dir reports
+
+      - name: Upload drift report as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-report
+          path: reports/
+          retention-days: 30
