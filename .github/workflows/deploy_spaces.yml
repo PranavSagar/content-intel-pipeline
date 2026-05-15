@@ -9,6 +9,7 @@ on:
       - "Dockerfile"
       - "requirements-serving.txt"
       - "hf_space_readme.md"
+  workflow_dispatch:  # Allow manual trigger from GitHub UI or gh CLI
 
 jobs:
   deploy:
