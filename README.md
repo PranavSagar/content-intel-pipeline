@@ -144,8 +144,10 @@ content-intel-pipeline/
 │   └── dashboard.json          # Importable Grafana dashboard (6 panels)
 │
 ├── docs/
+│   ├── README.md               # Index — what to read for what question
 │   ├── architecture.md         # Technical HLD + LLD with Mermaid diagrams
 │   ├── architecture-explained.md # Same architecture in plain English
+│   ├── decisions.md            # ADR-lite log of 12 major design decisions
 │   ├── concepts/               # Plain English + technical explanations
 │   │   ├── fine-tuning.md
 │   │   ├── transformer-end-to-end.md
@@ -258,6 +260,7 @@ confidence scores) are more reliable than eyeballing charts.
 |---|---|
 | [`docs/architecture.md`](docs/architecture.md) | Technical HLD + LLD. System context, component view, sequence diagrams for every flow (inference, Kafka, drift, observability, CI/CD), data model, failure modes, deployment topology. All diagrams in Mermaid so they're versioned and editable in PRs. |
 | [`docs/architecture-explained.md`](docs/architecture-explained.md) | The same architecture in plain English. Uses a newsroom analogy and walks one headline through the system end-to-end. |
+| [`docs/decisions.md`](docs/decisions.md) | Architecture Decision Records — the *why* behind every major choice (model, broker, delivery semantics, storage, hosting, observability pattern). 12 decisions in ADR-lite format. |
 | [`docs/concepts/`](docs/concepts/) | Per-component deep dives with both plain-English analogies and technical explanations — written while building, not reconstructed after. |
 | [`docs/build-log.md`](docs/build-log.md) | 15 real problems hit during development with root cause, fix, and lesson for each. |
 
