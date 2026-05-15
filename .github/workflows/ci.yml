@@ -21,28 +21,30 @@ jobs:
       - name: Install ruff (linter)
         run: pip install ruff
 
-      - name: Lint — check for errors and style issues
+      - name: Lint with ruff
         run: ruff check src/
 
       - name: Install serving dependencies
         run: pip install -r requirements-serving.txt
 
       - name: Verify serving app imports cleanly
-        run: python -c "from src.serving.app import app; print('serving: ok')"
+        run: |
+          python -c "from src.serving.app import app; print('serving ok')"
 
       - name: Install pipeline dependencies
         run: pip install -r requirements-pipeline.txt
 
       - name: Verify pipeline imports cleanly
         run: |
-          python -c "from src.pipeline.producer import make_kafka_config, on_delivery; print('producer: ok')"
-          python -c "from src.pipeline.consumer import make_cache_key, make_kafka_config; print('consumer: ok')"
+          python -c "from src.pipeline.producer import make_kafka_config, on_delivery; print('producer ok')"
+          python -c "from src.pipeline.consumer import make_cache_key, make_kafka_config; print('consumer ok')"
 
       - name: Install monitoring dependencies
         run: pip install -r requirements-monitoring.txt
 
       - name: Verify monitoring imports cleanly
-        run: python -c "from src.monitoring.drift import build_reference_df, load_current_df; print('drift: ok')"
+        run: |
+          python -c "from src.monitoring.drift import build_reference_df, load_current_df; print('drift ok')"
 
       - name: Smoke-test reference dataset builds correctly
         run: |
