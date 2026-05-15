@@ -4,7 +4,6 @@ import random
 import time
 
 from confluent_kafka import Producer
-from datasets import load_dataset
 from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=".env")
@@ -31,6 +30,7 @@ def on_delivery(err, msg):
 
 
 def load_articles() -> list[str]:
+    from datasets import load_dataset  # lazy — only needed at runtime, not on import
     print("[producer] loading AG News test articles...")
     dataset = load_dataset("ag_news", split="test")
     articles = [row["text"] for row in dataset]
