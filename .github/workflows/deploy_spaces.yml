@@ -32,7 +32,8 @@ jobs:
           cp Dockerfile hf_space/
           cp requirements-serving.txt hf_space/
           cp hf_space_readme.md hf_space/README.md
-          cp -r src/ hf_space/src/
+          rm -rf hf_space/src
+          cp -r src hf_space/
 
           cd hf_space
           git add .
