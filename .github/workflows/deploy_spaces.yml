@@ -1,0 +1,41 @@
+name: Deploy to HF Spaces
+
+on:
+  push:
+    branches: [master]
+    # Only redeploy when serving-related files change — not on doc updates
+    paths:
+      - "src/serving/**"
+      - "Dockerfile"
+      - "requirements-serving.txt"
+      - "hf_space_readme.md"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Push to HuggingFace Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "GitHub Actions"
+
+          # Clone the HF Space repo using token auth
+          git clone https://pranavsagar10:${HF_TOKEN}@huggingface.co/spaces/pranavsagar10/content-intel-classifier hf_space
+
+          # Copy the files the Space needs
+          cp Dockerfile hf_space/
+          cp requirements-serving.txt hf_space/
+          cp hf_space_readme.md hf_space/README.md
+          cp -r src/ hf_space/src/
+
+          cd hf_space
+          git add .
+
+          # --allow-empty so the step doesn't fail if there are no changes
+          git commit --allow-empty -m "deploy: sync from github ${{ github.sha }}"
+          git push
