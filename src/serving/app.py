@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from pydantic import BaseModel
@@ -64,6 +65,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
+
 
 # ── Request / Response schemas ─────────────────────────────────────────────────
 # Pydantic models validate the request body automatically.
@@ -75,6 +83,7 @@ class ClassifyResponse(BaseModel):
     label: str
     confidence: float
     latency_ms: float
+    scores: dict[str, float]  # all 4 class probabilities, sorted by score desc
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
@@ -91,20 +100,22 @@ def classify(req: ClassifyRequest):
     start = time.perf_counter()
 
     try:
-        result = model_store["classifier"](req.text, truncation=True, max_length=128)[0]
+        results = model_store["classifier"](req.text, truncation=True, max_length=128, top_k=None)
     except Exception as e:
         ERRORS.inc()
         raise HTTPException(status_code=500, detail=str(e))
 
     latency_s = time.perf_counter() - start
+    top = results[0]
 
-    REQUESTS.labels(label=result["label"]).inc()
+    REQUESTS.labels(label=top["label"]).inc()
     LATENCY.observe(latency_s)
 
     return ClassifyResponse(
-        label=result["label"],
-        confidence=round(result["score"], 4),
+        label=top["label"],
+        confidence=round(top["score"], 4),
         latency_ms=round(latency_s * 1000, 2),
+        scores={r["label"]: round(r["score"], 4) for r in results},
     )
 
 
