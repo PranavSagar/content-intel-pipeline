@@ -144,6 +144,8 @@ content-intel-pipeline/
 │   └── dashboard.json          # Importable Grafana dashboard (6 panels)
 │
 ├── docs/
+│   ├── architecture.md         # Technical HLD + LLD with Mermaid diagrams
+│   ├── architecture-explained.md # Same architecture in plain English
 │   ├── concepts/               # Plain English + technical explanations
 │   │   ├── fine-tuning.md
 │   │   ├── transformer-end-to-end.md
@@ -151,7 +153,7 @@ content-intel-pipeline/
 │   │   ├── kafka-pipeline.md
 │   │   ├── drift-monitoring.md
 │   │   └── grafana-monitoring.md
-│   └── build-log.md            # 12 real problems hit + how each was solved
+│   └── build-log.md            # 15 real problems hit + how each was solved
 │
 ├── .github/workflows/
 │   ├── ci.yml                  # Lint + import checks on every push
@@ -252,11 +254,12 @@ confidence scores) are more reliable than eyeballing charts.
 
 ## Documentation
 
-All concepts are documented in [`docs/`](docs/) with plain English analogies
-alongside technical explanations — written while building, not reconstructed after.
-
-The [`docs/build-log.md`](docs/build-log.md) records 12 real problems encountered
-during development: root cause, fix, and lesson for each.
+| Document | What's in it |
+|---|---|
+| [`docs/architecture.md`](docs/architecture.md) | Technical HLD + LLD. System context, component view, sequence diagrams for every flow (inference, Kafka, drift, observability, CI/CD), data model, failure modes, deployment topology. All diagrams in Mermaid so they're versioned and editable in PRs. |
+| [`docs/architecture-explained.md`](docs/architecture-explained.md) | The same architecture in plain English. Uses a newsroom analogy and walks one headline through the system end-to-end. |
+| [`docs/concepts/`](docs/concepts/) | Per-component deep dives with both plain-English analogies and technical explanations — written while building, not reconstructed after. |
+| [`docs/build-log.md`](docs/build-log.md) | 15 real problems hit during development with root cause, fix, and lesson for each. |
 
 ---
 
