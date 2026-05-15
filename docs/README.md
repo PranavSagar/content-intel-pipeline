@@ -11,6 +11,10 @@ of this project. Written while building — so the reasoning is fresh.
 - [The Kafka Pipeline — Producer + Consumer](concepts/kafka-pipeline.md)
 - [Drift Monitoring — Evidently](concepts/drift-monitoring.md)
 
+## Build Log
+
+- [Problems, Solutions, and Lessons](build-log.md)
+
 ## Architecture Decisions
 
 _Coming as we build each layer._
