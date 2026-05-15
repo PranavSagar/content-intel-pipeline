@@ -498,6 +498,138 @@ callers need different subsets of functionality.
 
 ---
 
+## Problem 13 — CD workflow double-nests `src/src/` on repeat deploys
+
+**When:** Second push to HF Spaces via the deploy workflow.
+
+**What happened:**
+The Space was running old code even after a successful deploy. Checking the
+HF Space repo showed files at `src/src/serving/app.py` instead of
+`src/serving/app.py`. The Dockerfile's `COPY src/ ./src/` picked up the
+correct path, so the old image kept running while the new code sat in the
+wrong place.
+
+**Why it happened:**
+The deploy script did:
+```bash
+cp -r src/ hf_space/src/
+```
+
+On the **first deploy**, `hf_space/src/` didn't exist — `cp -r` created it
+correctly with the contents of `src/`.
+
+On every **subsequent deploy**, `hf_space/src/` already existed from the
+previous run. When the destination exists, `cp -r src/ dest/` copies the
+*directory itself* into the destination — resulting in `hf_space/src/src/`.
+
+`git commit --allow-empty` hid the problem by succeeding even with no
+meaningful change, and the "11 files changed" in the log was the double-nested
+files being created.
+
+**Fix:**
+```bash
+rm -rf hf_space/src
+cp -r src hf_space/
+```
+
+Removing the destination first makes the copy idempotent — the result is
+always correct regardless of the repo's current state.
+
+**Lesson:**
+`cp -r src/ dest/` behaves differently depending on whether `dest/` exists.
+When syncing directories idempotently, either `rsync -a src/ dest/` or
+`rm -rf dest && cp -r src dest` are safe. The former is preferable in
+production; the latter is simpler for one-off deploy scripts.
+
+---
+
+## Problem 14 — HF Spaces shows `{"detail":"Not Found"}` at the root URL
+
+**When:** After the Space was deployed and running.
+
+**What happened:**
+Opening the Space URL in a browser showed `{"detail":"Not Found"}` — FastAPI's
+default 404 response. HF Spaces embeds the app in an iframe at the root `/`
+URL. Our FastAPI app had no route defined for `/`.
+
+**Why it happens:**
+FastAPI only serves routes you explicitly define. Any request to an undefined
+path returns a 404. Unlike a traditional web server that might serve a default
+file, FastAPI treats every path independently.
+
+**Fix:**
+```python
+from fastapi.responses import RedirectResponse
+
+@app.get("/", include_in_schema=False)
+def root():
+    return RedirectResponse(url="/docs")
+```
+
+`include_in_schema=False` hides this utility route from the Swagger UI docs.
+The redirect sends anyone hitting `/` to the auto-generated API documentation.
+
+**Lesson:**
+When deploying a bare API to a platform that renders the root URL (HF Spaces,
+any web proxy), always handle `/` explicitly. A redirect to `/docs` is a
+sensible default — it's immediately useful to anyone who opens the URL.
+
+---
+
+## Problem 15 — Browser blocks fetch from GitHub Pages (CORS)
+
+**When:** Building the demo UI at `pranavsagar.github.io/classify/`.
+
+**What happened:**
+The UI made a `fetch()` call to the HF Spaces API. In the browser console:
+```
+Access to fetch at 'https://...hf.space/classify' from origin
+'https://pranavsagar.github.io' has been blocked by CORS policy:
+No 'Access-Control-Allow-Origin' header is present on the requested resource.
+```
+
+The API worked fine from curl and Swagger (same origin), but the browser
+blocked it from a different origin.
+
+**Why it happens:**
+Browsers enforce the Same-Origin Policy — JavaScript on `pranavsagar.github.io`
+can't read responses from `pranavsagar10-content-intel-classifier.hf.space`
+unless the server explicitly allows it via CORS headers.
+
+Before the actual `POST` request, the browser sends an `OPTIONS` preflight:
+```
+OPTIONS /classify
+Origin: https://pranavsagar.github.io
+Access-Control-Request-Method: POST
+```
+
+Without `CORSMiddleware`, FastAPI returns 405 for the OPTIONS preflight, and
+the browser blocks the real request before it even fires.
+
+**Fix:**
+```python
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
+```
+
+`allow_origins=["*"]` is appropriate here because this is a public read API —
+any client should be able to call it. For an API with authentication or
+user-specific data, you'd restrict to specific origins.
+
+**Lesson:**
+CORS errors only appear in browsers, not curl or Postman. If you're building
+any frontend that calls a different-origin API, add CORS middleware from the
+start. Discovering it at UI-build time means a deploy cycle you could have
+skipped.
+
+---
+
 ## Summary — what's working end-to-end
 
 ```
@@ -527,6 +659,7 @@ SQLite → Evidently drift report → MLflow on DagsHub
 - Model latency: 13–37ms on CPU
 - Drift check: runs in seconds, produces HTML report + logs to MLflow
 
-**What's not built yet:**
-- Dockerfile + HF Spaces deployment
-- Project README with architecture diagram
+**Full stack — all layers shipped:**
+- Dockerfile + HF Spaces deployment (auto-deployed via GitHub Actions CD)
+- Project README with architecture diagram and live links
+- Demo UI at https://pranavsagar.github.io/classify/ (dark theme, animated score breakdown)

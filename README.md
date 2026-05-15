@@ -111,6 +111,7 @@ AG News dataset (120,000 articles)
 
 | Resource | URL |
 |----------|-----|
+| Live demo UI | https://pranavsagar.github.io/classify/ |
 | API (HF Spaces) | https://pranavsagar10-content-intel-classifier.hf.space |
 | API docs (Swagger) | https://pranavsagar10-content-intel-classifier.hf.space/docs |
 | Model (HF Hub) | https://huggingface.co/pranavsagar10/content-classifier-distilbert |
