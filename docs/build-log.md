@@ -371,6 +371,133 @@ a dedicated baseline run before monitoring can start.
 
 ---
 
+## Problem 10 — GitHub Actions CI: YAML syntax error (colon in string)
+
+**When:** First push of `ci.yml` to GitHub.
+
+**What happened:**
+```
+Invalid workflow file: .github/workflows/ci.yml#L31
+You have an error in your yaml syntax on line 31
+```
+
+Line 31 was:
+```yaml
+run: python -c "from src.serving.app import app; print('serving: ok')"
+```
+
+**Why it happened:**
+In YAML, `: ` (colon followed by a space) is a key-value separator — even
+inside what looks like a string value. The `'serving: ok'` part inside the
+unquoted `run:` value tripped the parser.
+
+Also had an em dash `—` in a step name which can cause encoding issues in
+some YAML parsers.
+
+**Fix:**
+Use block scalar (`|`) for any `run:` step that contains colons, quotes, or
+special characters. Block scalar tells YAML "treat everything indented below
+this line as a raw string":
+```yaml
+- name: Verify serving app imports cleanly
+  run: |
+    python -c "from src.serving.app import app; print('serving ok')"
+```
+
+Also removed the em dash from step names — plain ASCII is safer in CI config.
+
+**Lesson:**
+YAML is deceptively complex. Always use block scalar (`|`) for `run:` steps
+that contain Python one-liners, shell pipes, or any string with `: `.
+When in doubt, validate locally with `yamllint` before pushing.
+
+---
+
+## Problem 11 — GitHub Actions CI: pip cache fails with split requirements files
+
+**When:** Run #2, after fixing the YAML syntax.
+
+**What happened:**
+```
+No file matched to [**/requirements.txt or **/pyproject.toml]
+```
+
+We had `cache: pip` in the setup-python step, which tells GitHub Actions to
+cache pip's download cache keyed by a requirements file. It looks for
+`requirements.txt` or `pyproject.toml` by default.
+
+**Why it happened:**
+We split dependencies into four files: `requirements-serving.txt`,
+`requirements-pipeline.txt`, `requirements-training.txt`,
+`requirements-monitoring.txt`. There is no single `requirements.txt`.
+
+**Fix:**
+Use `cache-dependency-path` to list the actual files:
+```yaml
+- uses: actions/setup-python@v5
+  with:
+    python-version: "3.11"
+    cache: pip
+    cache-dependency-path: |
+      requirements-serving.txt
+      requirements-pipeline.txt
+      requirements-monitoring.txt
+```
+
+**Lesson:**
+Split requirements files are a valid pattern (different components have
+different deps), but you need to tell your CI tooling where to find them.
+This comes up in Docker too — `COPY requirements-serving.txt .` not
+`COPY requirements.txt .`.
+
+---
+
+## Problem 12 — GitHub Actions CI: `datasets` not in pipeline requirements
+
+**When:** Run #3, after fixing the pip cache.
+
+**What happened:**
+```
+ModuleNotFoundError: No module named 'datasets'
+```
+
+The CI step "Verify pipeline imports cleanly" ran:
+```
+python -c "from src.pipeline.producer import make_kafka_config, on_delivery"
+```
+
+This crashed because `producer.py` had `from datasets import load_dataset`
+at the **module level** — so importing the module triggered the datasets import,
+even though we never called `load_articles()`.
+
+**Why it happened:**
+`datasets` (HuggingFace) is in `requirements-training.txt`, not
+`requirements-pipeline.txt`. CI only installed pipeline dependencies.
+
+The module-level import meant every process that imports `producer.py` — CI,
+tests, anything — needs the full training stack installed.
+
+**Fix:**
+Moved the import inside the function that actually uses it (lazy import):
+```python
+def load_articles() -> list[str]:
+    from datasets import load_dataset  # only imported when actually called
+    ...
+```
+
+**Why this is the right pattern:**
+`datasets` pulls in `pyarrow`, `multiprocess`, and other heavy libraries.
+Importing it at module level means every consumer, every test, every CI step
+pays that cost — even if they never load any data. Lazy import means the cost
+is only paid when `load_articles()` is called.
+
+**Lesson:**
+Heavy optional dependencies should be lazy-imported inside the function that
+needs them. This is especially important in shared modules where different
+callers need different subsets of functionality.
+
+---
+
 ## Summary — what's working end-to-end
 
 ```
@@ -401,7 +528,5 @@ SQLite → Evidently drift report → MLflow on DagsHub
 - Drift check: runs in seconds, produces HTML report + logs to MLflow
 
 **What's not built yet:**
-- Grafana Cloud dashboard (Prometheus metrics → visual panels)
-- GitHub Actions (automated drift check, CI on push)
 - Dockerfile + HF Spaces deployment
 - Project README with architecture diagram
