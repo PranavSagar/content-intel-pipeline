@@ -10,6 +10,7 @@ of this project. Written while building — so the reasoning is fresh.
 - [The Serving Layer — FastAPI + Prometheus](concepts/serving-layer.md)
 - [The Kafka Pipeline — Producer + Consumer](concepts/kafka-pipeline.md)
 - [Drift Monitoring — Evidently](concepts/drift-monitoring.md)
+- [Grafana Monitoring — Metrics Dashboard](concepts/grafana-monitoring.md)
 
 ## Build Log
 
