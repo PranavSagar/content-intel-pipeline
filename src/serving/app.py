@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import Response
+from fastapi.responses import RedirectResponse, Response
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from pydantic import BaseModel
 from transformers import pipeline
@@ -78,6 +78,11 @@ class ClassifyResponse(BaseModel):
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
+@app.get("/", include_in_schema=False)
+def root():
+    return RedirectResponse(url="/docs")
+
+
 @app.post("/classify", response_model=ClassifyResponse)
 def classify(req: ClassifyRequest):
     if not req.text.strip():
